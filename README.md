@@ -174,8 +174,6 @@ state a;
 a = readwrite a; // or `readonly a`
 ```
 
-[^1]: Relevant question: is this a compiler or runtime error? The answer would probably be, compile time error to the extant that it is analyzable, otherwise a runtime error in dev mode, otherwise silently ignored in production mode.
-
 ## Components
 
 ### Component Props
@@ -284,18 +282,36 @@ component SessionToggle(user?: User) {
 Rendering a list:
 
 ```tsx
-component ItemsList<T>(items: T[], Item: Component<{ item: T }>) {
+const always = () => true;
+
+component ItemsList<T>(
+  items: T[],
+  Item: Component<{ item: T }>,
+  filter: (item: T) => boolean = always,
+) {
   <ul>
     {
       for (state item of items) {
-        <Item {item} />
+        if (filter(item)) {
+          <Item {item} />
+        }
       }
     }
   </ul>
 }
-```
 
-[^2]: Who knows, maybe other kinds of loops are supportable as well.
+// usage:
+<ItemsList
+  items={[1, 2, 3, 4]}
+  Item={component (item) {
+    // this is an anonymous component (like an anonymous function)
+    <li>
+      Item #{item}
+    </li>
+  }}
+  filter={number => number % 2 === 0}
+/>
+```
 
 ## Styling
 
@@ -336,3 +352,7 @@ component MyComp() {
   </div>
 }
 ```
+
+[^1]: Relevant question: is this a compiler or runtime error? The answer would probably be, compile time error to the extant that it is analyzable, otherwise a runtime error in dev mode, otherwise silently ignored in production mode.
+
+[^2]: Who knows, maybe other kinds of loops are supportable as well.
