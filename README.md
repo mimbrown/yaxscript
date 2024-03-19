@@ -1,6 +1,6 @@
 # YaxScript
 
-YaxScript is an exploration into the next generation of web frameworks.
+YaxScript (Yet Another X-script) is my exploration into a possible future of web frameworks.
 When React introduced JSX to the world, they showed the potential power of extending the JS language.
 Its beauty was in its flexibility.
 The usefulness of the abstraction the React team created is proved by the number of non-React frameworks that use it.
@@ -9,7 +9,9 @@ Since then, however, we have avoided extending the JS language any further.
 There's a high barrier to entry; once you cross that line of native JS semantics, you've now committed to writing your own language parser, syntax highlighting, language server, etc.
 But the potential gains in developer experience, compiler optimizations, and interoperability are enormous.
 I believe this is the next frontier for web frameworks.
-YaxScript is my own exploration into the language I would want to use to write code for the web.
+YaxScript is a description of the language I would want to use to write code for the web.
+It does not exist, and let's be honest, probably never will.
+But here's dreaming.
 
 Solid js is the most standard signal-driven framework I know of, and I've iterated on YaxScript with an eye towards how it would compile to Solid-specific primitives.
 Therefore I will use Solid throughout this explainer to show one possible compiled output of the YaxScript syntax.
@@ -18,7 +20,7 @@ Therefore I will use Solid throughout this explainer to show one possible compil
 
 There is no "JS" vs "TS" flavor of YaxScript.
 Typescript types are always allowed (albeit with the same restrictions imposed in TSX).
-It's up to the developer if/how they want type errors to be reported.
+It's up to the developer if/how they want type errors to be surfaced.
 If you don't want to use Typescript, then don't write it.
 If you're consuming a library written in Yaxscript that was written with type information, it will only help you.
 
@@ -317,8 +319,9 @@ component ItemsList<T>(
 
 Unlike reactivity, there's not much consensus on the best practices for styling.
 Some people love frameworks like Tailwind, others hate it.
+Most frameworks support some kind of scoped styling, but there's doubts about the ability of scoped styles to scale in large projects.
 YaxScript does not aim (or pretend to be able) to solve this debate, but it's too important to just punt.
-The way forward, I believe, is to provide a Yaxscript-native way to write styles for your components, just like JSX provided a native way to author HTML, while leaving the specific output and application of those styles to the compiler.
+The way forward, I believe, is to provide a YaxScript-native way to write styles for your components, just like JSX provided a native way to author HTML, while leaving the specific output and application of those styles to the compiler.
 
 Principles:
 * It would be a mistake to adopt a bespoke styling language like Tailwind.
