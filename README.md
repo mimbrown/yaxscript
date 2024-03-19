@@ -11,8 +11,16 @@ But the potential gains in developer experience, compiler optimizations, and int
 I believe this is the next frontier for web frameworks.
 YaxScript is my own exploration into the language I would want to use to write code for the web.
 
-Solid js is the most standard signal-driven framework I know of, and I defined YaxScript with an eye towards how it would compile to Solid-specific primitives.
+Solid js is the most standard signal-driven framework I know of, and I've iterated on YaxScript with an eye towards how it would compile to Solid-specific primitives.
 Therefore I will use Solid throughout this explainer to show one possible compiled output of the YaxScript syntax.
+
+## Types
+
+There is no "JS" vs "TS" flavor of YaxScript.
+Typescript types are always allowed (albeit with the same restrictions imposed in TSX).
+It's up to the developer if/how they want type errors to be reported.
+If you don't want to use Typescript, then don't write it.
+If you're consuming a library written in Yaxscript that was written with type information, it will only help you.
 
 ## Reactivity
 
@@ -28,7 +36,7 @@ Goals:
 * Explicit: devs should never be surprised about what they are dealing with.
   * To this end, signals should be statically analyzable.
   This is required for the compiler, but is also helpful for the developer.
-  It should be possible for the developer to know, at the level of syntax highlighting, whether they are reading from/writing to a regular variable or a signal.
+  It should be possible for the developer to know, even at the level of *syntax highlighting*, whether they are reading from/writing to a regular variable or a signal.
   * Ideally, there should be *no surprise proxies* (I'm looking at you, Vue and Svelte).
   Deep reactivity should be achievable without resorting to proxies.
 
@@ -37,12 +45,12 @@ YaxScript introduces the `state` keyword to declare a signal:
 ```ts
 state myState = 'foo';
 
-// compiles to:
-const [myState, setMyState] = createState('foo');
+// in Solid js, compiles to:
+const [myState, setMyState] = createSignal('foo');
 ```
 
 When a variable is declared using `state`, it's what we call a "live" signal.
-That means any reference to the variable is a (possibly tracked) reference to the signal's current value.
+That means any reference to the variable is a (possibly tracked, if we're in a tracking context) reference to the signal's current value.
 Similarly, any updates to the variable are writes are to the value of the signal.
 
 ```ts
@@ -50,7 +58,7 @@ postData({
   myState,
 });
 
-// compiles to:
+// in Solid js, compiles to:
 postData({
   myState: myState(),
 })
@@ -59,7 +67,7 @@ postData({
 ```ts
 myState = 'bar';
 
-// compiles to:
+// in Solid js, compiles to:
 setMyState('bar');
 ```
 
@@ -68,8 +76,10 @@ But sometimes we actually want to pass around the signal wrapper itself, not its
 It's quite normal to create the state and write its business logic in one place, and use that state in other places.
 Additionally, we often want to define a strict API that guards how the signal can be written to, while allowing arbitrary reads.
 To support this, YaxScript introduces two new unary operators that operate *only* on live signals: `readonly` and `readwrite`.
-`readonly` operates on a live signal and resolves to an "inert" readonly signal.
-`readwrite` operates on a live signal and resolves to an "inert" signal that can be written to as well as read.
+
+* `readonly` operates on a live signal and resolves to an "inert" readonly signal.
+* `readwrite` operates on a live signal and resolves to an "inert" signal that can be written to as well as read.
+
 Inert signals can be passed around like normal variables quite freely until they need to become live again.
 They are typed as opaque symbols with information about their value's type; you can't do anything with them except pass them around until you want them to be live again.
 
@@ -98,9 +108,9 @@ function createCounter() {
   };
 }
 
-// compiles to:
+// in Solid js, compiles to:
 function createCounter() {
-  const [count, setCount] = createState(0);
+  const [count, setCount] = createSignal(0);
   return {
     count,
     increment() {
@@ -126,14 +136,14 @@ const {
   increment,
 } = createCounter();
 
-// compiles to:
+// in Solid js, compiles to:
 const {
   count,
   increment,
 } = createCounter();
 ```
 
-In the above example, `count` is now a live signal.
+In the above example, `count` is a live signal.
 Note that the binding pattern *must* match the operator used to make the signal inert.
 It's an error to bind a `readonly` signal to a `readwrite` variable and vice versa.
 This is as much for the developer as for the compiler; there should never be any doubt as to whether the variable you are working with is mutable or not.
@@ -145,13 +155,13 @@ In other words, the following two statements are equivalent:
 state myState = 'foo';
 
 // equivalent to:
-const readwrite myState = createState('foo');
+const readwrite myState = createSignal('foo');
 
-// compiles to:
-const [myState, setMyState] = createState('foo');
+// in Solid js, compiles to:
+const [myState, setMyState] = createSignal('foo');
 ```
 
-It is an error to assign an inert signal (readonly or readwrite) as the value of another signal.
+It is an error[^1] to assign an inert signal (readonly or readwrite) as the value of another signal.
 The following are both disallowed:
 
 ```ts
@@ -164,10 +174,13 @@ state a;
 a = readwrite a; // or `readonly a`
 ```
 
+[^1]: Relevant question: is this a compiler or runtime error? The answer would probably be, compile time error to the extant that it is analyzable, otherwise a runtime error in dev mode, otherwise silently ignored in production mode.
+
 ## Components
 
+### Component Props
+
 Components in most frameworks are often functions (or close to it), but they normally have some special rules.
-React popularized the idea that components are just a function of the passed props.
 In YaxScript, components are somewhat similar to functions, but they're not quite the same.
 Components are declared using the `component` keyword, similar to the `function` keyword.
 They take a list of props, which are similar to function arguments except that they are *unordered* and *named*.
@@ -176,7 +189,7 @@ You would declare it like this:
 
 ```ts
 component MyComponent(name, class as classList) {
-  // We'll get to this in a minute.
+  // We'll get to the body in a minute.
   // But here we have access to the `name` and `classList`
   // variables, which are functionally equivalent to live
   // readonly signals.
@@ -195,12 +208,35 @@ Spread/rest props are allowed:
 component MyComponent(prop1, ...rest) {}
 ```
 
+Some frameworks have the concept of two-way binding (e.g. Vue's `v-model` and Svelte's `bind:` syntax).
+This is useful when the parent and child need to share state, and both need to be able to write to it.
+This is perhaps most common in form field-like components.
+YaxScript enables and encourages ergonomic signal-sharing.
+This forces explicitness, yet is consistent with the rest of the language, is non-verbose, and eliminates the overhead of keeping two signals in sync with one another because there is only one signal!
+If a component wants to expose one or more props as "two way bindable", it simply expects an inert readwrite signal and binds to it:
+
+```tsx
+// provide a default signal to make this prop optional
+component MyTextField(readwrite value = createSignal('')) {
+  // `value` is a live readwrite signal
+}
+
+// usage:
+state value = 'initial value';
+<MyTextField value={readwrite value} />
+
+// if the parent wants to provide a default value, but doesn't ever need to write to it:
+<MyTextField value={createSignal('initial value')} />
+```
+
+### Component Body
+
 The body of the component is not quite the same as a function body either.
 It's an enhanced expression.
 It's similar to the body of the proposed `do-expression` syntax, but with a couple extra features.
 Basically:
 * 0 or more statements are allowed.
-* The last statement must be a classic JS(X) expression, an `if` block, or a `for` or `while` loop.
+* The last statement must be a classic JS(X) expression, an `if` block, or a `for-of` loop[^2].
   * If the last statement is an `if` block or loop, the block's body is enhanced in the same way.
 * This last statement is what the whole component body resolves to (or `undefined` if there are no statements).
 * The `return` keyword is *disallowed*.
@@ -209,20 +245,28 @@ You can't early return out of a component.
 JSX-like templating is allowed and works how you would expect, except for one major difference: the expressions enclosed within `{}` in the JSX are also enhanced.
 
 It's easiest to see examples.
-Here's an example of a Login/Logout button:
+Here's an example of a Login/Logout Component:
 
 ```tsx
 component SessionToggle(user?: User) {
   console.log('This will log once per instance of this component');
 
+  // open question: is this right here a tracking context?
+  // in other words: if we reference the value of a signal here,
+  // and that signal changes, would the whole component rerender?
+
   if (user) {
     console.log('I log once every time the `user` becomes truthy');
 
+    // same open question: is this right here a tracking context?
+
     <>
-      <span>Hello, {
-        console.log('I log once every time `user.name` changes');
-        user.name
-      }!</span>
+      <span>
+        Hello, {
+          console.log('I log once every time `user.name` changes');
+          user.name
+        }!
+      </span>
       <button on:click={logout}>
         Sign out
       </button>
@@ -234,5 +278,61 @@ component SessionToggle(user?: User) {
       Sign in
     </button>
   }
+}
+```
+
+Rendering a list:
+
+```tsx
+component ItemsList<T>(items: T[], Item: Component<{ item: T }>) {
+  <ul>
+    {
+      for (state item of items) {
+        <Item {item} />
+      }
+    }
+  </ul>
+}
+```
+
+[^2]: Who knows, maybe other kinds of loops are supportable as well.
+
+## Styling
+
+Unlike reactivity, there's not much consensus on the best practices for styling.
+Some people love frameworks like Tailwind, others hate it.
+YaxScript does not aim (or pretend to be able) to solve this debate, but it's too important to just punt.
+The way forward, I believe, is to provide a Yaxscript-native way to write styles for your components, just like JSX provided a native way to author HTML, while leaving the specific output and application of those styles to the compiler.
+
+Principles:
+* It would be a mistake to adopt a bespoke styling language like Tailwind.
+The authoring experience should be based on CSS.
+StyleX should provide some good ideas.
+* It should follow the same goals of ergonomic and explicit.
+Enabling locality of thinking is a must.
+* There is no reason we can't give CSS the JSX treatment and allow mixing of JS within CSS.
+
+Pure spitballing with very little thought:
+
+```
+styleblock myFirstBlock(hoverColor: <color> = #000, hoverBackground: <color> = #c0ffee) {
+  padding: .5em;
+  border-radius: .25em;
+  &:hover {
+    background-color: var(hoverBackground);
+    color: var(hoverColor);
+  }
+}
+
+styleblock mySecondBlock {
+  border-radius: .5em;
+}
+
+component MyComp() {
+  <div (myFirstBlock(hoverBackground: #fff), mySecondBlock, styleblock {
+    font: 'Comic Sans'
+  })>
+
+  </div>
 }
 ```
